@@ -76,7 +76,7 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
         "#include \"lua.h\"\n"
         "#include \"lualib.h\"\n"
         "#include \"lauxlib.h\"\n\n"
-        "int main(int argc, char* argv[])\n"
+        "int main(int argc __attribute__((unused)), char* argv[] __attribute__((unused)))\n"
         "{\n"
         "    lua_State* L;\n"
         "    int result;\n"
@@ -90,7 +90,7 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
         "    /* Initialize Lua state */\n"
         "    L = luaL_newstate();\n"
         "    if (!L) {\n"
-        "        printf(\"Error: Failed to create Lua state\\n\");\n"
+        "        fprintf(stdout, \"Error: Failed to create Lua state\\n\");\n"
         "        fflush(stdout);\n"
         "        return 1;\n"
         "    }\n\n"
@@ -99,7 +99,7 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
         "    /* Execute embedded Lua code */\n"
         "    result = luaL_dostring(L, lua_code);\n"
         "    if (result != 0) {\n"
-        "        printf(\"Lua Error: %%s\\n\", lua_tostring(L, -1));\n"
+        "        fprintf(stdout, \"Lua Error: %%s\\n\", lua_tostring(L, -1));\n"
         "        fflush(stdout);\n"
         "        lua_close(L);\n"
         "        return 1;\n"
@@ -113,6 +113,9 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
 
     free(escaped_code);
     fclose(f);
+    
+    /* Keep temp file for debugging */
+    info_print("Generated C source: %s\n", output_source);
 
     return 0;
 }
