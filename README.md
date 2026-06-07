@@ -2,7 +2,7 @@
 
 A C-based compiler that converts Lua source files into standalone Windows executable files.
 ## help us
-*I published this repository (which still doesn't work properly) for you to fix it, improve it, and turn it into the best Lua compiler on the market 😁*
+***I published this repository (which still doesn't work properly) for you to fix it, improve it, and turn it into the best Lua compiler on the market 😁***
 
 ## Features
 
