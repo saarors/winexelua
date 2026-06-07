@@ -133,9 +133,16 @@ int compiler_compile(CompilerOptions* opts)
         return 1;
     }
 
+    if (opts->verbose) {
+        info_print("Lua code size: %zu bytes\n", strlen(embed_opts->lua_code));
+        info_print("First 100 chars: %.100s\n", embed_opts->lua_code);
+    }
+
     result = embedder_compile_source(temp_source, opts->output_file, opts->icon_file, opts->console_mode);
 
-    remove(temp_source);
+    /* Keep temp file for debugging - do NOT delete it */
+    info_print("Debug: Keeping temp source at: %s\n", temp_source);
+
     embedder_options_free(embed_opts);
 
     return result;
