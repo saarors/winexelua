@@ -3,9 +3,6 @@
 #include <string.h>
 #include "embedder.h"
 #include "utils.h"
-#include "lua.h"
-#include "lualib.h"
-#include "lauxlib.h"
 
 EmbedderOptions* embedder_options_new(void)
 {
@@ -116,15 +113,17 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
 int embedder_compile_source(const char* source_file, const char* output_file,
                            const char* icon_file, int console_mode)
 {
-    char command[1024];
+    char command[2048];
     int result;
 
 #ifdef _WIN32
     const char* compiler = "gcc";
+    const char* lua_include = "C:/Users/Saar/scoop/apps/lua/current/include";
+    const char* lua_lib = "C:/Users/Saar/scoop/apps/lua/current/lib";
     
     snprintf(command, sizeof(command),
-        "%s -o %s %s -llua -lm -Wall -Wextra",
-        compiler, output_file, source_file);
+        "%s -o %s %s -I%s -L%s -llua -lm -Wall -Wextra",
+        compiler, output_file, source_file, lua_include, lua_lib);
 #else
     snprintf(command, sizeof(command),
         "gcc -o %s %s -llua -lm -Wall -Wextra",
