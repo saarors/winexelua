@@ -58,7 +58,8 @@ char* file_extension(const char* filename)
 char* string_escape(const char* input, size_t* output_size)
 {
     size_t input_len = strlen(input);
-    char* output = malloc(input_len * 2 + 1);
+    /* Allocate enough space for worst case: each char becomes 4 bytes */
+    char* output = malloc(input_len * 4 + 1);
     size_t out_idx = 0;
     size_t i;
 
@@ -89,7 +90,7 @@ char* string_escape(const char* input, size_t* output_size)
                 output[out_idx++] = '"';
                 break;
             default:
-                if (c < 32 || c > 126) {
+                if (c < 32 || c >= 127) {
                     out_idx += snprintf(&output[out_idx], 5, "\\x%02x", c);
                 } else {
                     output[out_idx++] = c;
