@@ -52,6 +52,8 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
     FILE* f;
     char* escaped_code;
     size_t escaped_size;
+    const char* code = opts->lua_code;
+    size_t code_len = strlen(code);
 
     f = fopen(output_source, "w");
     if (!f) {
@@ -59,7 +61,7 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
         return 1;
     }
 
-    escaped_code = string_escape(opts->lua_code, &escaped_size);
+    escaped_code = string_escape(code, &escaped_size);
     if (!escaped_code) {
         error_print("Failed to escape Lua code\n");
         fclose(f);
@@ -80,6 +82,7 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
         "    int result;\n"
         "    const char* lua_code = \"");
     
+    /* Write escaped code with proper handling */
     fprintf(f, "%s", escaped_code);
     
     fprintf(f,
@@ -103,6 +106,7 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
         "    }\n\n"
         "    /* Flush output and cleanup */\n"
         "    fflush(stdout);\n"
+        "    fflush(stderr);\n"
         "    lua_close(L);\n"
         "    return 0;\n"
         "}\n");
