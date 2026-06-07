@@ -3,6 +3,9 @@
 #include <string.h>
 #include "embedder.h"
 #include "utils.h"
+#include "lua.h"
+#include "lualib.h"
+#include "lauxlib.h"
 
 EmbedderOptions* embedder_options_new(void)
 {
@@ -52,21 +55,6 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
     FILE* f;
     char* escaped_code;
     size_t escaped_size;
-    const char* template_start = 
-        "#include <stdio.h>\n"
-        "#include <stdlib.h>\n"
-        "#include <string.h>\n\n"
-        "int main(int argc, char* argv[])\n"
-        "{\n"
-        "    const char* lua_code = \"";
-
-    const char* template_end =
-        "\";\n\n"
-        "    printf(\"WinExeLua - Compiled Lua Executable\\n\");\n"
-        "    printf(\"Embedded Lua code size: %zu bytes\\n\", strlen(lua_code));\n"
-        "    printf(\"To run: compile with Lua runtime library\\n\");\n\n"
-        "    return 0;\n"
-        "}\n";
 
     f = fopen(output_source, "w");
     if (!f) {
@@ -81,9 +69,43 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
         return 1;
     }
 
-    fprintf(f, "%s", template_start);
+    /* Write C source with Lua interpreter integration */
+    fprintf(f,
+        "#include <stdio.h>\n"
+        "#include <stdlib.h>\n"
+        "#include <string.h>\n"
+        "#include \"lua.h\"\n"
+        "#include \"lualib.h\"\n"
+        "#include \"lauxlib.h\"\n\n"
+        "int main(int argc, char* argv[])\n"
+        "{\n"
+        "    lua_State* L;\n"
+        "    int result;\n"
+        "    const char* lua_code = \"");
+    
     fprintf(f, "%s", escaped_code);
-    fprintf(f, "%s", template_end);
+    
+    fprintf(f,
+        "\";\n\n"
+        "    /* Initialize Lua state */\n"
+        "    L = luaL_newstate();\n"
+        "    if (!L) {\n"
+        "        fprintf(stderr, \"Error: Failed to create Lua state\\n\");\n"
+        "        return 1;\n"
+        "    }\n\n"
+        "    /* Load Lua standard libraries */\n"
+        "    luaL_openlibs(L);\n\n"
+        "    /* Execute embedded Lua code */\n"
+        "    result = luaL_dostring(L, lua_code);\n"
+        "    if (result != 0) {\n"
+        "        fprintf(stderr, \"Lua Error: %%s\\n\", lua_tostring(L, -1));\n"
+        "        lua_close(L);\n"
+        "        return 1;\n"
+        "    }\n\n"
+        "    /* Cleanup */\n"
+        "    lua_close(L);\n"
+        "    return 0;\n"
+        "}\n");
 
     free(escaped_code);
     fclose(f);
@@ -94,21 +116,18 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
 int embedder_compile_source(const char* source_file, const char* output_file,
                            const char* icon_file, int console_mode)
 {
-    char command[512];
+    char command[1024];
     int result;
 
 #ifdef _WIN32
     const char* compiler = "gcc";
-    const char* subsystem = console_mode ? "console" : "windows";
-    const char* icon_option = (icon_file && icon_file[0] != '\0') ? 
-        " -Wl,--subsystem,windows -Wl,-rc=icon.res" : "";
-
+    
     snprintf(command, sizeof(command),
-        "%s -o %s %s -Wall -Wextra",
+        "%s -o %s %s -llua -lm -Wall -Wextra",
         compiler, output_file, source_file);
 #else
     snprintf(command, sizeof(command),
-        "gcc -o %s %s -Wall -Wextra",
+        "gcc -o %s %s -llua -lm -Wall -Wextra",
         output_file, source_file);
 #endif
 
