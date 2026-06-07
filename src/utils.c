@@ -69,13 +69,12 @@ char* string_escape(const char* input, size_t* output_size)
         unsigned char c = input[i];
 
         switch (c) {
+            case '\r':
+                /* Skip carriage returns - they cause issues in embedded strings */
+                break;
             case '\n':
                 output[out_idx++] = '\\';
                 output[out_idx++] = 'n';
-                break;
-            case '\r':
-                output[out_idx++] = '\\';
-                output[out_idx++] = 'r';
                 break;
             case '\t':
                 output[out_idx++] = '\\';
