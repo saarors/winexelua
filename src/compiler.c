@@ -106,6 +106,7 @@ int compiler_compile(CompilerOptions* opts)
 {
     EmbedderOptions* embed_opts;
     char temp_source[256];
+    char debug_file[256];
     int result;
 
     embed_opts = embedder_options_new();
@@ -126,11 +127,28 @@ int compiler_compile(CompilerOptions* opts)
     embed_opts->console_mode = opts->console_mode;
 
     snprintf(temp_source, sizeof(temp_source), "_temp_%lu.c", (unsigned long)getpid());
+    snprintf(debug_file, sizeof(debug_file), "debug_%lu.c", (unsigned long)getpid());
 
     if (embedder_generate_source(embed_opts, temp_source) != 0) {
         error_print("Failed to generate C source\n");
         embedder_options_free(embed_opts);
         return 1;
+    }
+
+    /* Save a copy for debugging */
+    FILE* src = fopen(temp_source, "rb");
+    if (src) {
+        FILE* dst = fopen(debug_file, "wb");
+        if (dst) {
+            char buf[4096];
+            size_t bytes;
+            while ((bytes = fread(buf, 1, sizeof(buf), src)) > 0) {
+                fwrite(buf, 1, bytes, dst);
+            }
+            fclose(dst);
+            info_print("Saved debug copy: %s\n", debug_file);
+        }
+        fclose(src);
     }
 
     if (opts->verbose) {
@@ -140,8 +158,9 @@ int compiler_compile(CompilerOptions* opts)
 
     result = embedder_compile_source(temp_source, opts->output_file, opts->icon_file, opts->console_mode);
 
-    /* Keep temp file for debugging - do NOT delete it */
-    info_print("Debug: Keeping temp source at: %s\n", temp_source);
+    /* Keep temp file for inspection - commented out remove */
+    /* remove(temp_source); */
+    info_print("Debug: Temp file kept at: %s\n", temp_source);
 
     embedder_options_free(embed_opts);
 
