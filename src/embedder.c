@@ -88,6 +88,7 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
         "    L = luaL_newstate();\n"
         "    if (!L) {\n"
         "        printf(\"Error: Failed to create Lua state\\n\");\n"
+        "        fflush(stdout);\n"
         "        return 1;\n"
         "    }\n\n"
         "    /* Load Lua standard libraries */\n"
@@ -96,10 +97,12 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
         "    result = luaL_dostring(L, lua_code);\n"
         "    if (result != 0) {\n"
         "        printf(\"Lua Error: %%s\\n\", lua_tostring(L, -1));\n"
+        "        fflush(stdout);\n"
         "        lua_close(L);\n"
         "        return 1;\n"
         "    }\n\n"
-        "    /* Cleanup */\n"
+        "    /* Flush output and cleanup */\n"
+        "    fflush(stdout);\n"
         "    lua_close(L);\n"
         "    return 0;\n"
         "}\n");
@@ -120,10 +123,11 @@ int embedder_compile_source(const char* source_file, const char* output_file,
     const char* compiler = "gcc";
     const char* lua_include = "C:/Users/Saar/scoop/apps/lua/current/include";
     const char* lua_lib = "C:/Users/Saar/scoop/apps/lua/current/lib";
+    const char* console_flag = console_mode ? "-mconsole" : "-mwindows";
     
     snprintf(command, sizeof(command),
-        "%s -o %s %s -I%s -L%s -llua -lm -Wall -Wextra",
-        compiler, output_file, source_file, lua_include, lua_lib);
+        "%s -o %s %s -I%s -L%s %s -llua -lm -Wall -Wextra",
+        compiler, output_file, source_file, lua_include, lua_lib, console_flag);
 #else
     snprintf(command, sizeof(command),
         "gcc -o %s %s -llua -lm -Wall -Wextra",
