@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include "compiler.h"
 #include "embedder.h"
 #include "utils.h"
@@ -124,7 +125,7 @@ int compiler_compile(CompilerOptions* opts)
     strncpy(embed_opts->version, opts->version, sizeof(embed_opts->version) - 1);
     embed_opts->console_mode = opts->console_mode;
 
-    snprintf(temp_source, sizeof(temp_source), "_temp_%d.c", getpid());
+    snprintf(temp_source, sizeof(temp_source), "_temp_%lu.c", (unsigned long)getpid());
 
     if (embedder_generate_source(embed_opts, temp_source) != 0) {
         error_print("Failed to generate C source\n");
