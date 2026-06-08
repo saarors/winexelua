@@ -37,35 +37,26 @@ int compiler_parse_args(int argc, char* argv[], CompilerOptions* opts)
                 if (i + 1 < argc) {
                     strncpy(opts->output_file, argv[i + 1], sizeof(opts->output_file) - 1);
                     i++;
-                } else {
-                    error_print("Error: -o requires an argument\n");
-                    return 1;
-                }
+                } else return 1;
             } else if (strcmp(argv[i], "-i") == 0 || strcmp(argv[i], "--icon") == 0) {
                 if (i + 1 < argc) {
                     strncpy(opts->icon_file, argv[i + 1], sizeof(opts->icon_file) - 1);
                     i++;
-                } else {
-                    error_print("Error: -i requires an argument\n");
-                    return 1;
-                }
+                } else return 1;
             } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
                 if (i + 1 < argc) {
                     strncpy(opts->version, argv[i + 1], sizeof(opts->version) - 1);
                     i++;
-                } else {
-                    error_print("Error: -v requires an argument\n");
-                    return 1;
-                }
-            } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--console") == 0) {
+                } else return 1;
+            } else if (strcmp(argv[i], "-c") == 0) {
                 opts->console_mode = 1;
-            } else if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
-                compiler_show_help(argv[0]);
-                return 1;
             } else if (strcmp(argv[i], "--verbose") == 0) {
                 opts->verbose = 1;
+            } else if (strcmp(argv[i], "-h") == 0) {
+                compiler_show_help(argv[0]);
+                return 1;
             } else {
-                error_print("Error: Unknown option '%s'\n", argv[i]);
+                error_print("Unknown option: %s\n", argv[i]);
                 return 1;
             }
         } else {
@@ -73,30 +64,24 @@ int compiler_parse_args(int argc, char* argv[], CompilerOptions* opts)
                 strncpy(opts->input_file, argv[i], sizeof(opts->input_file) - 1);
                 input_set = 1;
             } else {
-                error_print("Error: Multiple input files not supported\n");
                 return 1;
             }
         }
     }
 
-    if (!input_set) {
-        error_print("Error: No input file specified\n");
-        return 1;
-    }
+    if (!input_set) return 1;
 
     if (!file_exists(opts->input_file)) {
-        error_print("Error: Input file '%s' not found\n", opts->input_file);
+        error_print("Input not found: %s\n", opts->input_file);
         return 1;
     }
 
     if (opts->output_file[0] == '\0') {
         strncpy(opts->output_file, opts->input_file, sizeof(opts->output_file) - 1);
         char* ext = file_extension(opts->output_file);
-        if (ext) {
-            strcpy(ext, ".exe");
-        } else {
-            strncat(opts->output_file, ".exe", sizeof(opts->output_file) - strlen(opts->output_file) - 1);
-        }
+        if (ext) strcpy(ext, ".exe");
+        else strncat(opts->output_file, ".exe",
+            sizeof(opts->output_file) - strlen(opts->output_file) - 1);
     }
 
     return 0;
@@ -107,19 +92,14 @@ int compiler_compile(CompilerOptions* opts)
     EmbedderOptions* embed_opts;
     char temp_source[256];
     char debug_file[256];
-    int result;
 
     embed_opts = embedder_options_new();
-    if (!embed_opts) {
-        error_print("Failed to allocate memory for embedder options\n");
-        return 1;
-    }
+    if (!embed_opts) return 1;
 
-    if (embedder_read_lua_file(opts->input_file, embed_opts->lua_code, sizeof(embed_opts->lua_code)) != 0) {
-        error_print("Failed to read Lua file\n");
-        embedder_options_free(embed_opts);
+    if (embedder_read_lua_file(opts->input_file,
+                               embed_opts->lua_code,
+                               sizeof(embed_opts->lua_code)) != 0)
         return 1;
-    }
 
     strncpy(embed_opts->output_file, opts->output_file, sizeof(embed_opts->output_file) - 1);
     strncpy(embed_opts->icon_file, opts->icon_file, sizeof(embed_opts->icon_file) - 1);
@@ -129,56 +109,45 @@ int compiler_compile(CompilerOptions* opts)
     snprintf(temp_source, sizeof(temp_source), "_temp_%lu.c", (unsigned long)getpid());
     snprintf(debug_file, sizeof(debug_file), "debug_%lu.c", (unsigned long)getpid());
 
-    if (embedder_generate_source(embed_opts, temp_source) != 0) {
-        error_print("Failed to generate C source\n");
-        embedder_options_free(embed_opts);
+    if (embedder_generate_source(embed_opts, temp_source) != 0)
         return 1;
-    }
 
-    /* Save a copy for debugging */
+    /* debug copy */
     FILE* src = fopen(temp_source, "rb");
     if (src) {
         FILE* dst = fopen(debug_file, "wb");
         if (dst) {
             char buf[4096];
             size_t bytes;
-            while ((bytes = fread(buf, 1, sizeof(buf), src)) > 0) {
+            while ((bytes = fread(buf, 1, sizeof(buf), src)) > 0)
                 fwrite(buf, 1, bytes, dst);
-            }
             fclose(dst);
-            info_print("Saved debug copy: %s\n", debug_file);
         }
         fclose(src);
     }
 
     if (opts->verbose) {
-        info_print("Lua code size: %zu bytes\n", strlen(embed_opts->lua_code));
-        info_print("First 100 chars: %.100s\n", embed_opts->lua_code);
+        info_print("DEBUG: input file = %s\n", opts->input_file);
+        info_print("DEBUG: output file = %s\n", opts->output_file);
     }
 
-    result = embedder_compile_source(temp_source, opts->output_file, opts->icon_file, opts->console_mode);
+    int result = embedder_compile_source(temp_source,
+                                         opts->output_file,
+                                         opts->icon_file,
+                                         opts->console_mode);
 
-    /* Keep temp file for inspection - commented out remove */
-    /* remove(temp_source); */
-    info_print("Debug: Temp file kept at: %s\n", temp_source);
+    FILE* check = fopen(opts->output_file, "rb");
+    if (!check) {
+        error_print("FAILED: EXE was not created\n");
+        return 1;
+    }
+    fclose(check);
 
     embedder_options_free(embed_opts);
-
     return result;
 }
 
 void compiler_show_help(const char* program_name)
 {
-    printf("\nUsage: %s <input.lua> [options]\n\n", program_name);
-    printf("Options:\n");
-    printf("  -o, --output <file>      Output executable filename (default: input.exe)\n");
-    printf("  -i, --icon <file>        Custom application icon (ICO format)\n");
-    printf("  -v, --version <ver>      Application version string\n");
-    printf("  -c, --console            Enable console window\n");
-    printf("  --verbose                Enable verbose output\n");
-    printf("  -h, --help               Display this help message\n\n");
-    printf("Examples:\n");
-    printf("  %s hello.lua\n", program_name);
-    printf("  %s hello.lua -o hello.exe -c\n", program_name);
-    printf("  %s game.lua -o game.exe -i icon.ico\n\n", program_name);
+    printf("Usage: %s <input.lua> [options]\n", program_name);
 }
