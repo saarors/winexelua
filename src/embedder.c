@@ -17,7 +17,7 @@ EmbedderOptions* embedder_options_new(void)
     memset(opts->output_file, 0, sizeof(opts->output_file));
     memset(opts->icon_file, 0, sizeof(opts->icon_file));
     memset(opts->version, 0, sizeof(opts->version));
-    opts->console_mode = 0;
+    opts->console_mode = 1;
 
     return opts;
 }
@@ -28,72 +28,56 @@ void embedder_options_free(EmbedderOptions* opts)
 }
 
 /* =========================
-   READ LUA BYTECODE FILE
-   (.luac)
+   READ FILE (bytecode or lua source buffer)
 ========================= */
 
 int embedder_read_lua_file(const char* filename, char* buffer, size_t buffer_size)
 {
-    FILE* f;
-    size_t bytes_read;
-
-    f = fopen(filename, "rb");
+    FILE* f = fopen(filename, "rb");
     if (!f) {
         error_print("Failed to open file: %s\n", filename);
         return 1;
     }
 
-    bytes_read = fread(buffer, 1, buffer_size, f);
-
-    if (ferror(f)) {
-        error_print("Failed to read file: %s\n", filename);
-        fclose(f);
-        return 1;
-    }
+    size_t bytes_read = fread(buffer + sizeof(size_t), 1, buffer_size - sizeof(size_t), f);
 
     fclose(f);
 
-    if (bytes_read == buffer_size) {
-        error_print("Warning: file truncated (buffer too small)\n");
+    if (bytes_read == 0) {
+        error_print("Empty file or read error: %s\n", filename);
+        return 1;
     }
 
-    /* store size in first bytes (simple hack) */
-    ((size_t*)buffer)[0] = bytes_read;
+    /* store size safely */
+    *((size_t*)buffer) = bytes_read;
 
     return 0;
 }
 
 /* =========================
-   GENERATE C SOURCE (BYTECODE)
+   GENERATE C SOURCE
 ========================= */
 
 int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
 {
-    FILE* f;
-    const unsigned char* bytecode;
-    size_t bytecode_size;
-
-    f = fopen(output_source, "w");
+    FILE* f = fopen(output_source, "w");
     if (!f) {
         error_print("Failed to create output source file: %s\n", output_source);
         return 1;
     }
 
-    /* bytecode is stored after size header */
-    bytecode = (unsigned char*)opts->lua_code + sizeof(size_t);
-    bytecode_size = *((size_t*)opts->lua_code);
+    const unsigned char* bytecode = (const unsigned char*)opts->lua_code + sizeof(size_t);
+    size_t bytecode_size = *((size_t*)opts->lua_code);
 
     fprintf(f,
         "#include <stdio.h>\n"
         "#include <stdlib.h>\n"
-        "#include <string.h>\n"
         "#include \"lua.h\"\n"
-        "#include \"lualib.h\"\n"
-        "#include \"lauxlib.h\"\n\n"
+        "#include \"lauxlib.h\"\n"
+        "#include \"lualib.h\"\n\n"
         "static const unsigned char lua_bytecode[] = {\n"
     );
 
-    /* write byte array */
     for (size_t i = 0; i < bytecode_size; i++) {
         fprintf(f, "0x%02X,", bytecode[i]);
         if ((i + 1) % 12 == 0)
@@ -105,16 +89,26 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
         "static const size_t lua_bytecode_size = sizeof(lua_bytecode);\n\n"
         "int main(int argc, char* argv[])\n"
         "{\n"
+        "    (void)argc;\n"
+        "    (void)argv;\n\n"
         "    lua_State* L = luaL_newstate();\n"
         "    if (!L) {\n"
         "        printf(\"Failed to create Lua state\\n\");\n"
         "        return 1;\n"
         "    }\n\n"
         "    luaL_openlibs(L);\n\n"
-        "    if (luaL_loadbuffer(L, (const char*)lua_bytecode, lua_bytecode_size, \"embedded\") == 0) {\n"
-        "        lua_pcall(L, 0, LUA_MULTRET, 0);\n"
-        "    } else {\n"
-        "        printf(\"Lua Error: %%s\\n\", lua_tostring(L, -1));\n"
+        "    int load_status = luaL_loadbuffer(L, (const char*)lua_bytecode,\n"
+        "                                      lua_bytecode_size, \"embedded\");\n"
+        "    if (load_status != LUA_OK) {\n"
+        "        printf(\"Lua load error: %s\\n\", lua_tostring(L, -1));\n"
+        "        lua_close(L);\n"
+        "        return 1;\n"
+        "    }\n\n"
+        "    int pcall_status = lua_pcall(L, 0, LUA_MULTRET, 0);\n"
+        "    if (pcall_status != LUA_OK) {\n"
+        "        printf(\"Lua runtime error: %s\\n\", lua_tostring(L, -1));\n"
+        "        lua_close(L);\n"
+        "        return 1;\n"
         "    }\n\n"
         "    lua_close(L);\n"
         "    return 0;\n"
@@ -128,33 +122,41 @@ int embedder_generate_source(EmbedderOptions* opts, const char* output_source)
 }
 
 /* =========================
-   COMPILE STEP (UNCHANGED)
+   COMPILE STEP
 ========================= */
 
-int embedder_compile_source(const char* source_file, const char* output_file,
-                           const char* icon_file, int console_mode)
+int embedder_compile_source(const char* source_file,
+                            const char* output_file,
+                            const char* icon_file,
+                            int console_mode)
 {
     char command[2048];
-    int result;
 
 #ifdef _WIN32
     const char* compiler = "gcc";
     const char* lua_include = "C:/Users/Saar/scoop/apps/lua/current/include";
     const char* lua_lib = "C:/Users/Saar/scoop/apps/lua/current/lib";
+
     const char* console_flag = console_mode ? "-mconsole" : "-mwindows";
 
     snprintf(command, sizeof(command),
         "%s -o %s %s -I%s -L%s %s -llua -lm -Wall -Wextra",
-        compiler, output_file, source_file,
-        lua_include, lua_lib, console_flag);
+        compiler,
+        output_file,
+        source_file,
+        lua_include,
+        lua_lib,
+        console_flag);
 #else
     snprintf(command, sizeof(command),
         "gcc -o %s %s -llua -lm -Wall -Wextra",
-        output_file, source_file);
+        output_file,
+        source_file);
 #endif
 
     info_print("Executing: %s\n", command);
-    result = system(command);
+
+    int result = system(command);
 
     if (result == 0) {
         info_print("Successfully created executable: %s\n", output_file);
