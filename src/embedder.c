@@ -89,10 +89,12 @@ int embedder_compile_source(const char* source_file,
     char command[2048];
 
 #ifdef _WIN32
-    snprintf(command, sizeof(command),
-        "gcc -o %s %s -I. -llua -lm -Wall -Wextra",
-        output_file,
-        source_file);
+snprintf(command, sizeof(command),
+    "gcc -o %s %s -I\"%s\" -L\"%s\" -llua -lm -Wall -Wextra",
+    output_file,
+    source_file,
+    lua_include,
+    lua_lib);
 #else
     snprintf(command, sizeof(command),
         "gcc -o %s %s -llua -lm -Wall -Wextra",
