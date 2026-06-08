@@ -84,10 +84,10 @@ int embedder_compile_source(const char* source_file,
 {
     char command[2048];
 
-    snprintf(command, sizeof(command),
-        "gcc -o \"%s\" \"%s\" -llua -lm -Wall -Wextra",
-        output_file,
-        source_file);
+snprintf(command, sizeof(command),
+    "\"C:\\msys64\\mingw64\\bin\\gcc.exe\" -o \"%s\" \"%s\" -I\"C:\\msys64\\mingw64\\include\" -L\"C:\\msys64\\mingw64\\lib\" -llua -lm -Wall -Wextra",
+    output_file,
+    source_file);
 
     printf("COMMAND: %s\n", command);
 
